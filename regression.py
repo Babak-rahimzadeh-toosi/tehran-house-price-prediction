@@ -14,6 +14,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import sklearn
+from scipy.optimize import curve_fit
 
 df = pd.read_csv(r"data\price.csv")
 pd.set_option("display.float_format", lambda x: f"{x:.2f}")
@@ -265,6 +266,95 @@ plt.grid(
 plt.title("Residual Plot")
 plt.xlabel("Prediction")
 plt.ylabel("Residual (USD)")
+plt.tight_layout()
+
+plt.show()
+
+def logarithmic_model(x_value, beta_0, beta_1, beta_2):
+    """
+Calculate house prices using a logarithmic regression model.
+
+:param x_value: Input features containing Area and Score.
+:param beta_0: Intercept coefficient.
+:param beta_1: Coefficient for the logarithm of Area.
+:param beta_2: Coefficient for the logarithm of Score.
+:return: Predicted house prices.
+    """
+    if x_value.ndim > 1:
+        area = x_value[:,0]
+        score = x_value[:,1]
+
+    else:
+        area = x_value[0]
+        score = x_value[1]
+
+    return beta_0 + beta_1 * np.log(area) + beta_2 * np.log(score)
+
+
+score_log_df = score_df[["Area", "Score", "Price(USD)"]]
+train_mask = np.random.rand(len(score_df)) < 0.8
+
+train = score_log_df[train_mask]
+test = score_log_df[~train_mask]
+
+x_train = np.asanyarray(train[["Area", "Score"]])
+y_train = np.asanyarray(train["Price(USD)"])
+
+x_test = np.asanyarray(test[["Area", "Score"]])
+y_test = np.asanyarray(test["Price(USD)"])
+
+popt, pcov = curve_fit(logarithmic_model, x_train, y_train) # pylint:disable=unbalanced-tuple-unpacking
+print(
+    f"Intercept (beta_0): {popt[0]:.2f}\n"
+    f"Area Coefficient (beta_1): {popt[1]:.2f}\n"
+    f"Score Coefficient (beta_2): {popt[2]:.2f}"
+)
+
+xx = np.linspace(train["Area"].min(), train["Area"].max(), 300)
+fixed_score = np.full_like(xx, train["Score"].mean())
+
+yy = (
+    popt[0] + popt[1] * np.log(xx) + popt[2] * np.log(fixed_score)
+)
+
+plt.scatter(train["Area"], train["Price(USD)"], color="red", alpha=0.4, label="Actual Prices")
+plt.plot(xx, yy, "-b", label="Logarithmic Regression")
+plt.legend(loc="best")
+
+plt.grid(
+    visible=False
+)
+
+plt.title("Logarithmic Regression: Area vs. House Price")
+plt.xlabel("Area")
+plt.ylabel("Price(USD)")
+plt.tight_layout()
+
+plt.show()
+
+y_pred = logarithmic_model(x_test, *popt)
+
+mse = sklearn.metrics.mean_squared_error(y_test, y_pred)
+rmse = np.sqrt(mse)
+r2 = sklearn.metrics.r2_score(y_test, y_pred)
+
+print(f"Mean Squared Error (MSE): {mse: .2f}")
+print(f"Root Mean Squared error (RMSE): {rmse: .2f}")
+print(f"R-squared (R²): {r2: .4f}")
+
+residual = y_test - y_pred
+
+plt.scatter(y_pred, residual, color="blue", alpha=0.5 ,label="Residuals")
+plt.axhline(y=0, color="red", linestyle="--", label="Zero Residual Line")
+plt.legend()
+
+plt.grid(
+    visible=False
+)
+
+plt.title("Residual Plot: Logarithmic Regression")
+plt.xlabel("Predicted Price (USD)")
+plt.ylabel("Residuals (USD")
 plt.tight_layout()
 
 plt.show()
